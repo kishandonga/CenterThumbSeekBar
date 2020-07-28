@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.appcompat.widget.LinearLayoutCompat xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:layout_margin="16dp"
+    android:gravity="center"
+    android:orientation="vertical"
+    tools:context=".MainActivity">
+
+    <androidx.appcompat.widget.AppCompatSeekBar
+        android:id="@+id/androidSeekBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+
+    <ui.widget.seekbar.CenterThumbSeekBar
+        android:id="@+id/seek_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+
+        app:defaultBackgroundRangeColor="@color/colorAccent"
+        app:maxValue="+40.0"
+        app:minValue="-40.0"
+        app:progress="15"
+        app:trackRoundedCorners="true" />
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/tvProgress"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="130dp"
+        android:text="@string/lbl_zero" />
+
+</androidx.appcompat.widget.LinearLayoutCompat>
