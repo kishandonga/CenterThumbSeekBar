@@ -1,13 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <declare-styleable name="CenterThumbSeekBar">
-        <attr name="minValue" format="float" />
-        <attr name="maxValue" format="float" />
-        <attr name="progress" format="float" />
+        <attr name="fromValue" format="float" />
+        <attr name="toValue" format="float" />
+        <attr name="fromProgress" format="float" />
+        <attr name="toProgress" format="float" />
         <attr name="trackRoundedCorners" format="boolean" />
+        <attr name="thumbColor" format="color" />
+        <attr name="thumbPressedColor" format="color" />
         <attr name="thumbDrawable" format="reference" />
         <attr name="thumbPressedDrawable" format="reference" />
-        <attr name="defaultBackgroundColor" format="color" />
-        <attr name="defaultBackgroundRangeColor" format="color" />
+        <attr name="trackColor" format="color" />
+        <attr name="trackProgressColor" format="color" />
+        <attr name="trackHeight" format="dimension" />
+        <attr name="thumbRadius" format="dimension" />
+        <attr name="thumbPressedRadius" format="dimension" />
     </declare-styleable>
 </resources>

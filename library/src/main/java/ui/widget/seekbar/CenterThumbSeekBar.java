@@ -11,7 +11,6 @@ import android.graphics.RectF;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
-import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
@@ -21,34 +20,32 @@ import androidx.core.content.ContextCompat;
 @SuppressLint("ClickableViewAccessibility")
 public class CenterThumbSeekBar extends View {
 
-    public static final int INVALID_POINTER_ID = 255;
-    public static final int ACTION_POINTER_INDEX_MASK = 0x0000ff00;
-    public static final int ACTION_POINTER_INDEX_SHIFT = 8;
-    private static final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private static final int DEFAULT_RANGE_COLOR = Color.argb(0xFF, 0x33, 0xB5, 0xE5);
-    private static final int DEFAULT_BACKGROUND_COLOR = Color.parseColor("#CECECE");
-    private static final float DEFAULT_MIN_VALUE = -100f;
-    private static final float DEFAULT_MAX_VALUE = +100f;
-    private static final float DEFAULT_PROGRESS_VALUE = 0f;
-    private final Bitmap thumbImage;
-    private final Bitmap thumbPressedImage;
-    private final int defaultRangeColor;
-    private final int defaultBackgroundColor;
+    private final int trackProgressColor;
+    private final int trackColor;
+    private final int thumbColor;
+    private final int thumbPressColor;
     private final boolean hasRoundedCorners;
-
-    private final float thumbHalfWidth;
-    private final float thumbHalfHeight;
-    private final float trackHeight;
-    private final float padding;
-    private double absoluteMinValue;
-    private double absoluteMaxValue;
+    private final float fromValue;
+    private final float toValue;
+    private final double absoluteMinValue;
+    private final double absoluteMaxValue;
+    private final Paint paint;
+    private float padding;
+    private Bitmap thumbImage = null;
+    private Bitmap thumbPressedImage = null;
+    private float thumbRadius;
+    private float thumbPressedRadius;
+    private float trackHeight;
     private int scaledTouchSlop;
     private boolean isDragging;
     private boolean isThumbPressed;
     private double normalizedThumbValue = 0d;
-    private OnSeekBarChangeListener listener;
+    private OnFromValueChangeListener fromListener;
+    private OnToValueChangeListener toListener;
     private float mDownMotionX;
-    private int mActivePointerId = INVALID_POINTER_ID;
+    private int mActivePointerId = Const.INVALID_POINTER_ID;
+    private ThumbDirection thumbDirection = ThumbDirection.NONE;
+    private float newHeight;
 
     public CenterThumbSeekBar(Context context) {
         this(context, null);
@@ -61,38 +58,63 @@ public class CenterThumbSeekBar extends View {
     public CenterThumbSeekBar(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
 
+        paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        this.trackHeight = Const.DEFAULT_TRACK_HEIGHT;
+        this.thumbRadius = Const.DEFAULT_THUMB_RADIUS;
+        this.thumbPressedRadius = Const.DEFAULT_THUMB_PRESSED_RADIUS;
+
+        Const.DEFAULT_THUMB_COLOR = ContextCompat.getColor(context, R.color.colorAccent);
+        Const.DEFAULT_TRACK_PROGRESS_COLOR = ContextCompat.getColor(context, R.color.colorAccent);
+        Const.DEFAULT_TRACK_COLOR = ContextCompat.getColor(context, R.color.default_track_color);
+
+        this.absoluteMinValue = Const.DEFAULT_MIN_VALUE;
+        this.absoluteMaxValue = Const.DEFAULT_MAX_VALUE;
+        setProgress(Const.DEFAULT_PROGRESS_VALUE);
+
         // Attribute initialization
         final TypedArray a = context.obtainStyledAttributes(attrs, R.styleable.CenterThumbSeekBar, defStyleAttr, 0);
 
-        Drawable thumbImageDrawable = a.getDrawable(R.styleable.CenterThumbSeekBar_thumbDrawable);
-        if (thumbImageDrawable == null) {
-            thumbImageDrawable = ContextCompat.getDrawable(context, R.drawable.seek_thumb_normal);
+        this.fromValue = a.getFloat(R.styleable.CenterThumbSeekBar_fromValue, Const.DEFAULT_MIN_VALUE);
+        this.toValue = a.getFloat(R.styleable.CenterThumbSeekBar_toValue, Const.DEFAULT_MAX_VALUE);
+
+        float fromProgress = a.getFloat(R.styleable.CenterThumbSeekBar_fromProgress, Const.DEFAULT_PROGRESS_VALUE);
+        if ((fromProgress != Const.DEFAULT_PROGRESS_VALUE) && (fromProgress <= fromValue)) {
+            setProgress(getFromProgress(fromProgress));
         }
-        this.thumbImage = getBitmapFromDrawable(thumbImageDrawable);
 
-        Drawable thumbImagePressedDrawable = a.getDrawable(R.styleable.CenterThumbSeekBar_thumbPressedDrawable);
-        if (thumbImagePressedDrawable == null) {
-            thumbImagePressedDrawable = ContextCompat.getDrawable(context, R.drawable.seek_thumb_pressed);
+        float toProgress = a.getFloat(R.styleable.CenterThumbSeekBar_toProgress, Const.DEFAULT_PROGRESS_VALUE);
+        if ((toProgress != Const.DEFAULT_PROGRESS_VALUE) && (toProgress <= toValue)) {
+            setProgress(getToProgress(toProgress));
         }
-        this.thumbPressedImage = getBitmapFromDrawable(thumbImagePressedDrawable);
 
-        this.absoluteMinValue = a.getFloat(R.styleable.CenterThumbSeekBar_minValue, DEFAULT_MIN_VALUE);
-        this.absoluteMaxValue = a.getFloat(R.styleable.CenterThumbSeekBar_maxValue, DEFAULT_MAX_VALUE);
-        float progress = a.getFloat(R.styleable.CenterThumbSeekBar_progress, DEFAULT_PROGRESS_VALUE);
-        setProgress(progress);
+        this.thumbColor = a.getColor(R.styleable.CenterThumbSeekBar_thumbColor, Const.DEFAULT_THUMB_COLOR);
+        this.thumbPressColor = a.getColor(R.styleable.CenterThumbSeekBar_thumbPressedColor, Const.DEFAULT_THUMB_COLOR);
 
-        this.defaultBackgroundColor = a.getColor(R.styleable.CenterThumbSeekBar_defaultBackgroundColor, DEFAULT_BACKGROUND_COLOR);
-        this.defaultRangeColor = a.getColor(R.styleable.CenterThumbSeekBar_defaultBackgroundRangeColor, DEFAULT_RANGE_COLOR);
+        this.trackProgressColor = a.getColor(R.styleable.CenterThumbSeekBar_trackProgressColor, Const.DEFAULT_TRACK_PROGRESS_COLOR);
+        this.trackColor = a.getColor(R.styleable.CenterThumbSeekBar_trackColor, Const.DEFAULT_TRACK_COLOR);
 
         this.hasRoundedCorners = a.getBoolean(R.styleable.CenterThumbSeekBar_trackRoundedCorners, false);
+        this.trackHeight = a.getDimension(R.styleable.CenterThumbSeekBar_trackHeight, trackHeight);
+        this.thumbRadius = a.getDimension(R.styleable.CenterThumbSeekBar_thumbRadius, thumbRadius);
+        this.thumbPressedRadius = a.getDimension(R.styleable.CenterThumbSeekBar_thumbPressedRadius, thumbPressedRadius);
+
+        newHeight = Math.max(thumbRadius * 2, thumbPressedRadius * 2);
+
+        Drawable thumbImageDrawable = a.getDrawable(R.styleable.CenterThumbSeekBar_thumbDrawable);
+        Drawable thumbImagePressedDrawable = a.getDrawable(R.styleable.CenterThumbSeekBar_thumbPressedDrawable);
+
+        if (thumbImageDrawable != null && thumbImagePressedDrawable != null) {
+            this.thumbImage = Utils.getBitmapFromDrawable(thumbImageDrawable);
+            this.thumbPressedImage = Utils.getBitmapFromDrawable(thumbImagePressedDrawable);
+            //thumb drawable
+            thumbRadius = Math.max(thumbImage.getWidth(), thumbImage.getHeight());
+            thumbPressedRadius = Math.max(thumbPressedImage.getWidth(), thumbPressedImage.getHeight());
+            newHeight = Math.max(thumbRadius, thumbPressedRadius);
+        }
 
         a.recycle();
 
-        float thumbWidth = thumbImage.getWidth();
-        thumbHalfWidth = 0.5f * thumbWidth;
-        thumbHalfHeight = 0.5f * thumbImage.getHeight();
-        trackHeight = 6f;
-        padding = thumbHalfWidth;
+        padding = newHeight;
         setFocusable(true);
         setFocusableInTouchMode(true);
         setBackground(new ColorDrawable(Color.TRANSPARENT));
@@ -100,36 +122,27 @@ public class CenterThumbSeekBar extends View {
         scaledTouchSlop = ViewConfiguration.get(getContext()).getScaledTouchSlop();
     }
 
-    public static Bitmap getBitmapFromDrawable(Drawable drawable) {
-        int width = drawable.getIntrinsicWidth();
-        int height = drawable.getIntrinsicHeight();
-        Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(bitmap);
-        drawable.setBounds(0, 0, width, height);
-        drawable.draw(canvas);
-        return bitmap;
+    private float getFromProgress(float fromProgress) {
+        return (fromProgress * Const.DEFAULT_MIN_VALUE) / fromValue;
     }
 
-    public void setOnSeekBarChangeListener(OnSeekBarChangeListener listener) {
-        this.listener = listener;
+    private float getToProgress(float toProgress) {
+        return (toProgress * Const.DEFAULT_MAX_VALUE) / toValue;
     }
 
-    public void setAbsoluteMinMaxValue(double absoluteMinValue, double absoluteMaxValue) {
-        this.absoluteMinValue = absoluteMinValue;
-        this.absoluteMaxValue = absoluteMaxValue;
+    public void setOnFromValueChangeListener(OnFromValueChangeListener listener) {
+        this.fromListener = listener;
+    }
+
+    public void setOnToValueChangeListener(OnToValueChangeListener listener) {
+        this.toListener = listener;
     }
 
     @Override
-    protected synchronized void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-        int width = 200;
-        if (MeasureSpec.UNSPECIFIED != MeasureSpec.getMode(widthMeasureSpec)) {
-            width = MeasureSpec.getSize(widthMeasureSpec);
-        }
-        int height = thumbImage.getHeight() + 12;
-        if (MeasureSpec.UNSPECIFIED != MeasureSpec.getMode(heightMeasureSpec)) {
-            height = Math.min(height, MeasureSpec.getSize(heightMeasureSpec));
-        }
-        setMeasuredDimension(width, height);
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        int width = (int) (Const.DEFAULT_WIDTH);
+        int height = (int) (newHeight + (padding / 4f));
+        setMeasuredDimension(Utils.measureDim(width, widthMeasureSpec), Utils.measureDim(height, heightMeasureSpec));
     }
 
     @Override
@@ -180,9 +193,7 @@ public class CenterThumbSeekBar extends View {
                         }
                     }
 
-                    if (listener != null) {
-                        listener.onOnSeekBarValueChange(this, normalizedToValue(normalizedThumbValue));
-                    }
+                    notifyValueChange();
                 }
                 break;
 
@@ -201,9 +212,7 @@ public class CenterThumbSeekBar extends View {
 
                 isThumbPressed = false;
                 invalidate();
-                if (listener != null) {
-                    listener.onOnSeekBarValueChange(this, normalizedToValue(normalizedThumbValue));
-                }
+                notifyValueChange();
                 break;
 
             case MotionEvent.ACTION_POINTER_DOWN: {
@@ -229,13 +238,33 @@ public class CenterThumbSeekBar extends View {
         return true;
     }
 
+    private void notifyValueChange() {
+        if (thumbDirection == ThumbDirection.LEFT) {
+            if (fromListener != null) {
+                fromListener.onValueChange(getFromProgressValue(normalizedValue(normalizedThumbValue)));
+            }
+        }
+        if (thumbDirection == ThumbDirection.RIGHT) {
+            if (toListener != null) {
+                toListener.onValueChange(getToProgressValue(normalizedValue(normalizedThumbValue)));
+            }
+        }
+    }
+
+    private double getFromProgressValue(double progress) {
+        return Math.abs((fromValue * progress) / Const.DEFAULT_MIN_VALUE);
+    }
+
+    private double getToProgressValue(double progress) {
+        return Math.abs((toValue * progress) / Const.DEFAULT_MAX_VALUE);
+    }
+
     private void onSecondaryPointerUp(MotionEvent ev) {
-        final int pointerIndex = (ev.getAction() & ACTION_POINTER_INDEX_MASK) >> ACTION_POINTER_INDEX_SHIFT;
+        final int pointerIndex = (ev.getAction() & Const.ACTION_POINTER_INDEX_MASK) >> Const.ACTION_POINTER_INDEX_SHIFT;
         final int pointerId = ev.getPointerId(pointerIndex);
         if (pointerId == mActivePointerId) {
             // This was our active pointer going up. Choose
             // a new active pointer and adjust accordingly.
-            // TODO: Make this decision more intelligent.
             final int newPointerIndex = pointerIndex == 0 ? 1 : 0;
             mDownMotionX = ev.getX(newPointerIndex);
             mActivePointerId = ev.getPointerId(newPointerIndex);
@@ -261,21 +290,21 @@ public class CenterThumbSeekBar extends View {
     /**
      * Converts screen space x-coordinates into normalized values.
      *
-     * @param screenCoord The x-coordinate in screen space to convert.
+     * @param screenCoordinate The x-coordinate in screen space to convert.
      * @return The normalized value.
      */
-    private double screenToNormalized(float screenCoord) {
+    private double screenToNormalized(float screenCoordinate) {
         int width = getWidth();
         if (width <= 2 * padding) {
             // prevent division by zero, simply return 0.
             return 0d;
         } else {
-            double result = (screenCoord - padding) / (width - 2 * padding);
+            double result = (screenCoordinate - padding) / (width - 2 * padding);
             return Math.min(1d, Math.max(0d, result));
         }
     }
 
-    private double normalizedToValue(double normalized) {
+    private double normalizedValue(double normalized) {
         return absoluteMinValue + normalized * (absoluteMaxValue - absoluteMinValue);
     }
 
@@ -299,24 +328,15 @@ public class CenterThumbSeekBar extends View {
         invalidate();
     }
 
-    /**
-     * Sets value of seek bar to the given value
-     *
-     * @param value The new value to set
-     */
-    public void setProgress(double value) {
-        double newThumbValue = valueToNormalized(value);
-        if (newThumbValue > absoluteMaxValue || newThumbValue < absoluteMinValue) {
-            throw new IllegalArgumentException("Value should be in the middle of max and min value");
-        }
-        normalizedThumbValue = newThumbValue;
+    private void setProgress(double value) {
+        normalizedThumbValue = valueToNormalized(value);
         invalidate();
     }
 
     /**
      * This is called when the user has started touching this widget.
      */
-    void onStartTrackingTouch() {
+    private void onStartTrackingTouch() {
         isDragging = true;
     }
 
@@ -324,7 +344,7 @@ public class CenterThumbSeekBar extends View {
      * This is called when the user either releases his touch or the touch is
      * canceled.
      */
-    void onStopTrackingTouch() {
+    private void onStopTrackingTouch() {
         isDragging = false;
     }
 
@@ -347,7 +367,7 @@ public class CenterThumbSeekBar extends View {
      * @return true if x-coordinate is in thumb range, false otherwise.
      */
     private boolean isInThumbRange(float touchX, double normalizedThumbValue) {
-        return Math.abs(touchX - normalizedToScreen(normalizedThumbValue)) <= thumbHalfWidth;
+        return Math.abs(touchX - normalizedToScreen(normalizedThumbValue)) <= thumbRadius;
     }
 
     /**
@@ -367,7 +387,7 @@ public class CenterThumbSeekBar extends View {
         // draw seek bar background line
         final RectF rect = new RectF(padding, 0.5f * (getHeight() - trackHeight), getWidth() - padding, 0.5f * (getHeight() + trackHeight));
 
-        paint.setColor(defaultBackgroundColor);
+        paint.setColor(trackColor);
         if (hasRoundedCorners) {
             canvas.drawRoundRect(rect, trackHeight, trackHeight, paint);
         } else {
@@ -375,18 +395,17 @@ public class CenterThumbSeekBar extends View {
         }
 
         // draw seek bar active range line
-
         if (normalizedToScreen(valueToNormalized(0.0d)) < normalizedToScreen(normalizedThumbValue)) {
-            Log.d(VIEW_LOG_TAG, "thumb: right");
+            thumbDirection = ThumbDirection.RIGHT;
             rect.left = normalizedToScreen(valueToNormalized(0.0d));
             rect.right = normalizedToScreen(normalizedThumbValue);
         } else {
-            Log.d(VIEW_LOG_TAG, "thumb: left");
+            thumbDirection = ThumbDirection.LEFT;
             rect.right = normalizedToScreen(valueToNormalized(0.0d));
             rect.left = normalizedToScreen(normalizedThumbValue);
         }
 
-        paint.setColor(defaultRangeColor);
+        paint.setColor(trackProgressColor);
         if (hasRoundedCorners) {
             canvas.drawRoundRect(rect, trackHeight, trackHeight, paint);
         } else {
@@ -394,7 +413,6 @@ public class CenterThumbSeekBar extends View {
         }
 
         drawThumb(normalizedToScreen(normalizedThumbValue), isThumbPressed, canvas);
-        Log.d(VIEW_LOG_TAG, "thumb: " + normalizedToValue(normalizedThumbValue));
     }
 
     /**
@@ -405,18 +423,34 @@ public class CenterThumbSeekBar extends View {
      * @param canvas           The canvas to draw upon.
      */
     private void drawThumb(float screenCoordinate, boolean pressed, Canvas canvas) {
-        if (pressed) {
-            canvas.drawCircle(screenCoordinate, (0.5f * getHeight()), thumbHalfHeight + 5, paint);
+        if (thumbImage != null && thumbPressedImage != null) {
+            if (pressed) {
+                canvas.drawBitmap(thumbPressedImage, screenCoordinate - (thumbPressedRadius / 2f), (0.5f * getHeight()) - (thumbPressedRadius / 2f), paint);
+            } else {
+                canvas.drawBitmap(thumbImage, screenCoordinate - (thumbRadius / 2f), (0.5f * getHeight()) - (thumbRadius / 2f), paint);
+            }
         } else {
-            canvas.drawCircle(screenCoordinate, (0.5f * getHeight()), thumbHalfHeight, paint);
+            if (pressed) {
+                paint.setColor(thumbPressColor);
+                canvas.drawCircle(screenCoordinate, (0.5f * getHeight()), thumbPressedRadius, paint);
+            } else {
+                paint.setColor(thumbColor);
+                canvas.drawCircle(screenCoordinate, (0.5f * getHeight()), thumbRadius, paint);
+            }
         }
-        //canvas.drawBitmap(pressed ? thumbPressedImage : thumbImage, screenCoordinate - thumbHalfWidth, (0.5f * getHeight()) - thumbHalfHeight, paint);
     }
 
     /**
-     * Callback listener interface to notify about changed range values.
+     * Callback listener interface to notify about changed from values.
      */
-    public interface OnSeekBarChangeListener {
-        void onOnSeekBarValueChange(CenterThumbSeekBar bar, double value);
+    public interface OnFromValueChangeListener {
+        void onValueChange(double value);
+    }
+
+    /**
+     * Callback listener interface to notify about changed to values.
+     */
+    public interface OnToValueChangeListener {
+        void onValueChange(double value);
     }
 }

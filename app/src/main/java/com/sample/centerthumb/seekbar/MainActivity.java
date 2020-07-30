@@ -19,9 +19,16 @@ public class MainActivity extends AppCompatActivity {
         tvProgress = findViewById(R.id.tvProgress);
 
         CenterThumbSeekBar seekBar = findViewById(R.id.seek_bar);
-        seekBar.setOnSeekBarChangeListener(new CenterThumbSeekBar.OnSeekBarChangeListener() {
+        seekBar.setOnFromValueChangeListener(new CenterThumbSeekBar.OnFromValueChangeListener() {
             @Override
-            public void onOnSeekBarValueChange(CenterThumbSeekBar bar, double value) {
+            public void onValueChange(double value) {
+                tvProgress.setText(String.valueOf(value));
+            }
+        });
+
+        seekBar.setOnToValueChangeListener(new CenterThumbSeekBar.OnToValueChangeListener() {
+            @Override
+            public void onValueChange(double value) {
                 tvProgress.setText(String.valueOf(value));
             }
         });

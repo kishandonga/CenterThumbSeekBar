@@ -19,10 +19,18 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
 
-        app:defaultBackgroundRangeColor="@color/colorAccent"
-        app:maxValue="+40.0"
-        app:minValue="-40.0"
-        app:progress="15"
+        app:fromProgress="5"
+        app:fromValue="10.0"
+
+        app:thumbColor="@color/colorAccent"
+        app:thumbPressedColor="@color/colorPrimary"
+
+        app:toProgress="250"
+        app:toValue="500.0"
+
+        app:trackHeight="2dp"
+        app:trackProgressColor="@color/colorPrimary"
+
         app:trackRoundedCorners="true" />
 
     <androidx.appcompat.widget.AppCompatTextView
